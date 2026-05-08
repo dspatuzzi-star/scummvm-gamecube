@@ -14,29 +14,20 @@ jobs:
   build-gamecube-profile-a:
     name: Build GameCube Profile A
     runs-on: ubuntu-latest
-    container:
-      image: devkitpro/devkitppc:latest
     defaults:
       run:
         shell: bash
-    env:
-      DEVKITPRO: /opt/devkitpro
-      DEVKITPPC: /opt/devkitpro/devkitPPC
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show toolchain info
+      - name: Build Profile A DOL in devkitPro Docker
         run: |
-          echo "DEVKITPRO=$DEVKITPRO"
-          echo "DEVKITPPC=$DEVKITPPC"
-          which powerpc-eabi-gcc || true
-          which elf2dol || true
-
-      - name: Build Profile A DOL
-        run: |
-          chmod +x build-gamecube-profile-a.sh
-          ./build-gamecube-profile-a.sh
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            devkitpro/devkitppc:latest \
+            bash -lc 'export DEVKITPRO=/opt/devkitpro DEVKITPPC=/opt/devkitpro/devkitPPC; echo DEVKITPRO=$DEVKITPRO; echo DEVKITPPC=$DEVKITPPC; which powerpc-eabi-gcc; which elf2dol || true; chmod +x build-gamecube-profile-a.sh; ./build-gamecube-profile-a.sh'
 
       - name: Verify output
         run: |
