@@ -49,6 +49,17 @@
 extern "C" {
 #endif
 
+#ifdef GAMECUBE
+// Older libogc releases used by our pinned GameCube toolchain do not
+// provide VIDEO_HaveComponentCable(), while newer gx/video helper code may
+// still reference it at link time. A GameCube without that API should behave
+// as if no component cable is present.
+__attribute__((weak))
+bool VIDEO_HaveComponentCable(void) {
+	return false;
+}
+#endif
+
 bool reset_btn_pressed = false;
 bool power_btn_pressed = false;
 
