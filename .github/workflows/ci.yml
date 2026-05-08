@@ -21,7 +21,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build GameCube DOL using older devkitPro stack
+      - name: Build GameCube DOL using pinned devkitPro stack
         id: build
         continue-on-error: true
         run: |
@@ -37,6 +37,14 @@ jobs:
               set -euxo pipefail
               export DEVKITPRO=/opt/devkitpro
               export DEVKITPPC=/opt/devkitpro/devkitPPC
+              export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
+              if ! command -v powerpc-eabi-g++ >/dev/null 2>&1; then
+                if command -v dkp-pacman >/dev/null 2>&1; then
+                  dkp-pacman -Sy --noconfirm devkitPPC gamecube-dev
+                else
+                  pacman -Sy --noconfirm devkitPPC gamecube-dev
+                fi
+              fi
               export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
               echo DEVKITPRO=$DEVKITPRO
               echo DEVKITPPC=$DEVKITPPC
