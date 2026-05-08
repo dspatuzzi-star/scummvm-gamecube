@@ -1,6 +1,6 @@
 name: Build GameCube DOL
 
-on:
+"on":
   workflow_dispatch:
   push:
     branches:
