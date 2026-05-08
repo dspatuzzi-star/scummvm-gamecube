@@ -14,28 +14,34 @@ jobs:
   build-gamecube-profile-a:
     name: Build GameCube Profile A
     runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitppc:latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITPPC: /opt/devkitpro/devkitPPC
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install devkitPro package manager
+      - name: Show toolchain info
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg ca-certificates xz-utils make git build-essential pkg-config
-          wget -O /tmp/devkitpro-pacman.deb https://apt.devkitpro.org/devkitpro-pacman.amd64.deb
-          sudo dpkg -i /tmp/devkitpro-pacman.deb
-
-      - name: Install GameCube toolchain
-        run: |
-          sudo dkp-pacman -Sy --noconfirm gamecube-dev
+          echo "DEVKITPRO=$DEVKITPRO"
+          echo "DEVKITPPC=$DEVKITPPC"
+          which powerpc-eabi-gcc || true
+          which elf2dol || true
 
       - name: Build Profile A DOL
-        env:
-          DEVKITPRO: /opt/devkitpro
-          DEVKITPPC: /opt/devkitpro/devkitPPC
         run: |
           chmod +x build-gamecube-profile-a.sh
           ./build-gamecube-profile-a.sh
+
+      - name: Verify output
+        run: |
+          test -f wiidist/scummvm/scummvm.dol
+          ls -lh wiidist/scummvm/scummvm.dol
 
       - name: Upload GameCube DOL artifact
         uses: actions/upload-artifact@v4
