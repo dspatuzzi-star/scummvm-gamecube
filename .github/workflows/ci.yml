@@ -3,7 +3,6 @@ on:
 workflow_dispatch:
   push:
     branches: [ master, main ]
-[push, pull_request]
 #  schedule:
 #    - cron: '0 0-23/4 * * *'
 permissions:
