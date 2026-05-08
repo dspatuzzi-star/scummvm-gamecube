@@ -21,36 +21,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build GameCube DOL in devkitPro Docker
+      - name: Build GameCube DOL using older devkitPro stack
         id: build
         continue-on-error: true
         run: |
           set -o pipefail
           rm -rf logs artifact
           mkdir -p logs artifact
-          docker pull devkitpro/devkitppc:latest 2>&1 | tee logs/01-docker-pull.log
+          docker pull devkitpro/devkitppc:2021-08-06 2>&1 | tee logs/01-docker-pull.log
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
-            devkitpro/devkitppc:latest \
+            devkitpro/devkitppc:2021-08-06 \
             bash -lc '
               set -euxo pipefail
               export DEVKITPRO=/opt/devkitpro
               export DEVKITPPC=/opt/devkitpro/devkitPPC
               export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
-              if ! command -v powerpc-eabi-g++ >/dev/null 2>&1; then
-                if command -v dkp-pacman >/dev/null 2>&1; then
-                  dkp-pacman -Sy --noconfirm devkitPPC gamecube-dev || true
-                elif command -v pacman >/dev/null 2>&1; then
-                  pacman -Sy --noconfirm devkitPPC gamecube-dev || true
-                fi
-              fi
               echo DEVKITPRO=$DEVKITPRO
               echo DEVKITPPC=$DEVKITPPC
               echo PATH=$PATH
               which powerpc-eabi-gcc
               which powerpc-eabi-g++
               which elf2dol || true
+              powerpc-eabi-gcc --version || true
               ./configure --help > logs/configure-help.txt || true
               ./configure \
                 --host=gamecube \
