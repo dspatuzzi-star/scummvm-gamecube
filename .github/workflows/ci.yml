@@ -12,31 +12,58 @@ permissions:
 
 jobs:
   build-gamecube-profile-a:
-    name: Build GameCube Profile A
+    name: Build GameCube Profile A from ScummVM v2.5.1
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Profile A DOL in devkitPro Docker
+      - name: Prepare source package
         run: |
+          set -euxo pipefail
+          curl -L -o scummvm-v2.5.1.tar.gz https://github.com/scummvm/scummvm/archive/refs/tags/v2.5.1.tar.gz
+          tar -xzf scummvm-v2.5.1.tar.gz
+          mv scummvm-2.5.1 source
+
+      - name: Build GameCube DOL in devkitPro Docker
+        run: |
+          set -euxo pipefail
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace \
+            -w /workspace/source \
             devkitpro/devkitppc:latest \
-            bash -lc 'export DEVKITPRO=/opt/devkitpro DEVKITPPC=/opt/devkitpro/devkitPPC; echo DEVKITPRO=$DEVKITPRO; echo DEVKITPPC=$DEVKITPPC; which powerpc-eabi-gcc; which elf2dol || true; chmod +x build-gamecube-profile-a.sh; ./build-gamecube-profile-a.sh'
+            bash -lc '
+              set -euxo pipefail
+              export DEVKITPRO=/opt/devkitpro
+              export DEVKITPPC=/opt/devkitpro/devkitPPC
+              if command -v dkp-pacman >/dev/null 2>&1; then dkp-pacman -Sy --noconfirm gamecube-dev || true; fi
+              which powerpc-eabi-gcc
+              which elf2dol || true
+              FLAGS="--host=gamecube --disable-all-engines --enable-engine=scumm --enable-engine=gob --enable-engine=groovie --enable-engine=sci --enable-engine=agi --enable-engine=saga --enable-engine=sky --enable-engine=tinsel --enable-engine=sword1 --enable-engine=sword2 --disable-debug --enable-release"
+              if ./configure --help | grep -q -- "--enable-static"; then FLAGS="$FLAGS --enable-static"; fi
+              if ./configure --help | grep -q -- "--disable-mt32emu"; then FLAGS="$FLAGS --disable-mt32emu"; fi
+              if ./configure --help | grep -q -- "--disable-eventrecorder"; then FLAGS="$FLAGS --disable-eventrecorder"; fi
+              if ./configure --help | grep -q -- "--disable-updates"; then FLAGS="$FLAGS --disable-updates"; fi
+              if ./configure --help | grep -q -- "--disable-text-console"; then FLAGS="$FLAGS --disable-text-console"; fi
+              echo "Configure flags: $FLAGS"
+              ./configure $FLAGS
+              make -j2
+              make wiidist
+            '
 
-      - name: Verify output
+      - name: Collect DOL
         run: |
-          test -f wiidist/scummvm/scummvm.dol
-          ls -lh wiidist/scummvm/scummvm.dol
+          set -euxo pipefail
+          mkdir -p artifact
+          if [ -f source/wiidist/scummvm/scummvm.dol ]; then cp source/wiidist/scummvm/scummvm.dol artifact/scummvm.dol; fi
+          if [ -f source/scummvm.dol ]; then cp source/scummvm.dol artifact/scummvm.dol; fi
+          find source -name '*.dol' -print
+          test -f artifact/scummvm.dol
+          ls -lh artifact/scummvm.dol
 
       - name: Upload GameCube DOL artifact
         uses: actions/upload-artifact@v4
         with:
           name: scummvm-gamecube-profile-a-dol
-          path: wiidist/scummvm/scummvm.dol
+          path: artifact/scummvm.dol
           if-no-files-found: error
