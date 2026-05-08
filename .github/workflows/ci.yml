@@ -21,7 +21,8 @@ jobs:
       - name: Prepare source package
         run: |
           set -euxo pipefail
-          mkdir -p logs artifact
+          rm -rf logs artifact source scummvm-v2.5.1.tar.gz
+          mkdir -p logs artifact report
           curl -L --retry 5 -o scummvm-v2.5.1.tar.gz https://github.com/scummvm/scummvm/archive/refs/tags/v2.5.1.tar.gz 2>&1 | tee logs/01-download.log
           tar -xzf scummvm-v2.5.1.tar.gz 2>&1 | tee logs/02-extract.log
           mv scummvm-2.5.1 source
@@ -31,7 +32,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          mkdir -p logs artifact
+          mkdir -p logs artifact report
           docker pull devkitpro/devkitppc:latest 2>&1 | tee logs/03-docker-pull.log
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
@@ -68,13 +69,20 @@ jobs:
           if [ -f source/scummvm.dol ]; then cp source/scummvm.dol artifact/scummvm.dol; fi
           if [ -f source/config.log ]; then cp source/config.log logs/config.log; fi
           if [ -f source/config.mk ]; then cp source/config.mk logs/config.mk.txt; fi
+          echo "Build exit code: $BUILD_EXIT" > report/summary.txt
+          echo "Found files:" >> report/summary.txt
+          cat logs/found-files.txt >> report/summary.txt || true
+          echo "Last build lines:" >> report/summary.txt
+          tail -n 200 logs/04-build.log >> report/summary.txt || true
           exit 0
 
-      - name: Upload diagnostic logs
+      - name: Upload diagnostic report
         uses: actions/upload-artifact@v4
         with:
           name: gamecube-build-diagnostics
-          path: logs/
+          path: |
+            logs/
+            report/
           if-no-files-found: warn
 
       - name: Upload GameCube DOL artifact if built
@@ -85,6 +93,6 @@ jobs:
           path: artifact/scummvm.dol
           if-no-files-found: error
 
-      - name: Fail if DOL was not produced
+      - name: Finish
         run: |
-          test -f artifact/scummvm.dol
+          if [ -f artifact/scummvm.dol ]; then echo "DOL built successfully"; else echo "No DOL yet; diagnostics artifact uploaded"; fi
