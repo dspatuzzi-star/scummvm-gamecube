@@ -37,8 +37,19 @@ jobs:
               set -euxo pipefail
               export DEVKITPRO=/opt/devkitpro
               export DEVKITPPC=/opt/devkitpro/devkitPPC
-              which powerpc-eabi-gcc || true
-              which powerpc-eabi-g++ || true
+              export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
+              if ! command -v powerpc-eabi-g++ >/dev/null 2>&1; then
+                if command -v dkp-pacman >/dev/null 2>&1; then
+                  dkp-pacman -Sy --noconfirm devkitPPC gamecube-dev || true
+                elif command -v pacman >/dev/null 2>&1; then
+                  pacman -Sy --noconfirm devkitPPC gamecube-dev || true
+                fi
+              fi
+              echo DEVKITPRO=$DEVKITPRO
+              echo DEVKITPPC=$DEVKITPPC
+              echo PATH=$PATH
+              which powerpc-eabi-gcc
+              which powerpc-eabi-g++
               which elf2dol || true
               ./configure --help > logs/configure-help.txt || true
               ./configure \
