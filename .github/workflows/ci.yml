@@ -21,13 +21,18 @@ jobs:
       - name: Prepare source package
         run: |
           set -euxo pipefail
-          curl -L -o scummvm-v2.5.1.tar.gz https://github.com/scummvm/scummvm/archive/refs/tags/v2.5.1.tar.gz
-          tar -xzf scummvm-v2.5.1.tar.gz
+          mkdir -p logs artifact
+          curl -L --retry 5 -o scummvm-v2.5.1.tar.gz https://github.com/scummvm/scummvm/archive/refs/tags/v2.5.1.tar.gz 2>&1 | tee logs/01-download.log
+          tar -xzf scummvm-v2.5.1.tar.gz 2>&1 | tee logs/02-extract.log
           mv scummvm-2.5.1 source
 
       - name: Build GameCube DOL in devkitPro Docker
+        id: build
+        continue-on-error: true
         run: |
-          set -euxo pipefail
+          set -o pipefail
+          mkdir -p logs artifact
+          docker pull devkitpro/devkitppc:latest 2>&1 | tee logs/03-docker-pull.log
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace/source \
@@ -36,9 +41,15 @@ jobs:
               set -euxo pipefail
               export DEVKITPRO=/opt/devkitpro
               export DEVKITPPC=/opt/devkitpro/devkitPPC
-              if command -v dkp-pacman >/dev/null 2>&1; then dkp-pacman -Sy --noconfirm gamecube-dev || true; fi
-              which powerpc-eabi-gcc
+              echo DEVKITPRO=$DEVKITPRO
+              echo DEVKITPPC=$DEVKITPPC
+              uname -a || true
+              ls -la /opt/devkitpro || true
+              ls -la /opt/devkitpro/devkitPPC/bin || true
+              which powerpc-eabi-gcc || true
+              which powerpc-eabi-g++ || true
               which elf2dol || true
+              ./configure --help > /workspace/logs/configure-help.txt || true
               FLAGS="--host=gamecube --disable-all-engines --enable-engine=scumm --enable-engine=gob --enable-engine=groovie --enable-engine=sci --enable-engine=agi --enable-engine=saga --enable-engine=sky --enable-engine=tinsel --enable-engine=sword1 --enable-engine=sword2 --disable-debug --enable-release"
               if ./configure --help | grep -q -- "--enable-static"; then FLAGS="$FLAGS --enable-static"; fi
               if ./configure --help | grep -q -- "--disable-mt32emu"; then FLAGS="$FLAGS --disable-mt32emu"; fi
@@ -49,21 +60,31 @@ jobs:
               ./configure $FLAGS
               make -j2
               make wiidist
-            '
-
-      - name: Collect DOL
-        run: |
-          set -euxo pipefail
-          mkdir -p artifact
+            ' 2>&1 | tee logs/04-build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "$BUILD_EXIT" > logs/build-exit-code.txt
+          find source -maxdepth 5 -type f \( -name '*.dol' -o -name '*.elf' -o -name 'config.log' -o -name 'config.mk' \) -print > logs/found-files.txt || true
           if [ -f source/wiidist/scummvm/scummvm.dol ]; then cp source/wiidist/scummvm/scummvm.dol artifact/scummvm.dol; fi
           if [ -f source/scummvm.dol ]; then cp source/scummvm.dol artifact/scummvm.dol; fi
-          find source -name '*.dol' -print
-          test -f artifact/scummvm.dol
-          ls -lh artifact/scummvm.dol
+          if [ -f source/config.log ]; then cp source/config.log logs/config.log; fi
+          if [ -f source/config.mk ]; then cp source/config.mk logs/config.mk.txt; fi
+          exit 0
 
-      - name: Upload GameCube DOL artifact
+      - name: Upload diagnostic logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamecube-build-diagnostics
+          path: logs/
+          if-no-files-found: warn
+
+      - name: Upload GameCube DOL artifact if built
+        if: hashFiles('artifact/scummvm.dol') != ''
         uses: actions/upload-artifact@v4
         with:
           name: scummvm-gamecube-profile-a-dol
           path: artifact/scummvm.dol
           if-no-files-found: error
+
+      - name: Fail if DOL was not produced
+        run: |
+          test -f artifact/scummvm.dol
