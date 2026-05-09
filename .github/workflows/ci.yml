@@ -1,101 +1,48 @@
 name: Build GameCube DOL
 
-"on":
+on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-      - main
-
-permissions:
-  contents: read
+    branches: [main, master]
 
 jobs:
-  build-gamecube-profile-a:
-    name: Build GameCube Profile A conservative
+  build-gamecube:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build GameCube DOL using pinned devkitPro stack
+      - name: Build GameCube in Docker
         id: build
-        continue-on-error: true
         run: |
-          set -o pipefail
-          rm -rf logs artifact
-          mkdir -p logs artifact
-          docker pull devkitpro/devkitppc:2021-08-06 2>&1 | tee logs/01-docker-pull.log
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            -w /workspace \
-            devkitpro/devkitppc:2021-08-06 \
-            bash -lc '
-              set -euxo pipefail
-              export DEVKITPRO=/opt/devkitpro
-              export DEVKITPPC=/opt/devkitpro/devkitPPC
-              export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
-              if ! command -v powerpc-eabi-g++ >/dev/null 2>&1; then
-                if command -v dkp-pacman >/dev/null 2>&1; then
-                  dkp-pacman -Sy --noconfirm devkitPPC gamecube-dev
-                else
-                  pacman -Sy --noconfirm devkitPPC gamecube-dev
-                fi
-              fi
-              export PATH=$DEVKITPPC/bin:$DEVKITPRO/tools/bin:$PATH
-              echo DEVKITPRO=$DEVKITPRO
-              echo DEVKITPPC=$DEVKITPPC
-              echo PATH=$PATH
-              which powerpc-eabi-gcc
-              which powerpc-eabi-g++
-              which elf2dol || true
-              powerpc-eabi-gcc --version || true
-              ./configure --help > logs/configure-help.txt || true
-              ./configure \
-                --host=gamecube \
-                --disable-all-engines \
-                --enable-engine=scumm \
-                --enable-engine=gob \
-                --enable-engine=groovie \
-                --enable-engine=sci \
-                --enable-engine=agi \
-                --enable-engine=saga \
-                --enable-engine=sky \
-                --enable-engine=tinsel \
-                --enable-engine=sword1 \
-                --enable-engine=sword2 \
-                --disable-debug \
-                --enable-release
-              make -j2
-              make wiidist
-            ' 2>&1 | tee logs/02-build.log
-          BUILD_EXIT=${PIPESTATUS[0]}
-          echo "$BUILD_EXIT" > logs/build-exit-code.txt
-          find . -maxdepth 6 -type f \( -name '*.dol' -o -name '*.elf' -o -name 'config.log' -o -name 'config.mk' \) -print > logs/found-files.txt || true
-          if [ -f wiidist/scummvm/scummvm.dol ]; then cp wiidist/scummvm/scummvm.dol artifact/scummvm.dol; fi
-          if [ -f scummvm.dol ]; then cp scummvm.dol artifact/scummvm.dol; fi
-          if [ -f config.log ]; then cp config.log logs/config.log; fi
-          if [ -f config.mk ]; then cp config.mk logs/config.mk.txt; fi
+          set +e
+          ./ci/gamecube-build-docker.sh "$GITHUB_WORKSPACE" gamecube-build.log
+          BUILD_EXIT=$?
+          echo "build_exit=${BUILD_EXIT}" >> "$GITHUB_OUTPUT"
+          if [ -f wiidist/scummvm/scummvm.dol ]; then
+            echo "dol_built=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dol_built=false" >> "$GITHUB_OUTPUT"
+          fi
           exit 0
 
-      - name: Upload diagnostic report
+      - name: Upload build logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gamecube-build-diagnostics
-          path: logs/
-          if-no-files-found: warn
+          name: gamecube-build-logs
+          path: gamecube-build.log
+          if-no-files-found: error
 
-      - name: Upload GameCube DOL artifact if built
-        if: hashFiles('artifact/scummvm.dol') != ''
+      - name: Upload GameCube DOL artifact
+        if: always() && steps.build.outputs.dol_built == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: scummvm-gamecube-profile-a-dol
-          path: artifact/scummvm.dol
+          path: wiidist/scummvm/scummvm.dol
           if-no-files-found: error
 
-      - name: Finish
+      - name: Fail job if build failed
+        if: always() && steps.build.outputs.build_exit != '0'
         run: |
-          if [ -f artifact/scummvm.dol ]; then echo "DOL built successfully"; else echo "No DOL yet; diagnostics artifact uploaded"; fi
+          echo "Container build failed with exit code ${{ steps.build.outputs.build_exit }}"
+          exit 1
