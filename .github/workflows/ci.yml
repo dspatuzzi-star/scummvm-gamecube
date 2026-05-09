@@ -16,7 +16,11 @@ jobs:
 
       - name: Build GameCube DOL
         run: |
-          cat > gamecube-build.sh <<'EOF'
+          docker run --rm -i \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            devkitpro/devkitppc:2021-08-06 \
+            /bin/bash -s 2>&1 | tee gamecube-build.log <<'EOF'
           set -euo pipefail
           export DEVKITPRO=/opt/devkitpro
           export DEVKITPPC=/opt/devkitpro/devkitPPC
@@ -44,23 +48,6 @@ jobs:
           test -f wiidist/scummvm/scummvm.dol
           EOF
 
-          chmod +x gamecube-build.sh
-          : > gamecube-build.log
-          set +e
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            devkitpro/devkitppc:2021-08-06 \
-            /bin/bash /workspace/gamecube-build.sh 2>&1 | tee gamecube-build.log
-          BUILD_EXIT=${PIPESTATUS[0]}
-          set -e
-
-          ls -lah
-          pwd
-          cat gamecube-build.log || true
-
-          exit ${BUILD_EXIT}
-
       - name: Upload GameCube DOL artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -68,8 +55,8 @@ jobs:
           name: scummvm-gamecube-profile-a-dol
           path: wiidist/scummvm/scummvm.dol
 
-      - name: Upload build logs
-        if: always()
+      - name: Upload build logs on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: gamecube-build-logs
