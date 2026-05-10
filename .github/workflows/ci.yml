@@ -36,18 +36,8 @@ jobs:
               ./configure \
                 --host=gamecube \
                 --disable-all-engines \
-                --enable-engine=scumm \
-                --enable-engine=gob \
-                --enable-engine=groovie \
-                --enable-engine=sci \
-                --enable-engine=agi \
-                --enable-engine=saga \
-                --enable-engine=sky \
-                --enable-engine=tinsel \
-                --enable-engine=sword1 \
-                --enable-engine=sword2 \
+                --enable-engine-static=scumm,gob,groovie,sci,agi,saga,sky,tinsel,sword1,sword2 \
                 --enable-static \
-                --disable-plugins \
                 --disable-debug \
                 --enable-release
 
